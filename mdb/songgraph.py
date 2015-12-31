@@ -5,6 +5,9 @@ from datetime import timedelta
 import networkx as nx
 
 def make_play_graph(sdb, grtype=nx.MultiDiGraph):
+    """ Read the play times from sdb and return a NetworkX graph structure with nodes representing songs and 
+        edges representing sequential plays.
+    """
     gr = grtype()
     cur = sdb.cursor()
     cur.execute("SELECT song, datetime FROM plays")
