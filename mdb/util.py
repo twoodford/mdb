@@ -17,3 +17,8 @@ def sname_to_key(sname, sdb):
     cur = sdb.cursor()
     cur.execute("SELECT key FROM songs WHERE name=?", (sname,))
     return cur.fetchone()[0]
+
+def sname_artist_to_key(sname, artist, sdb):
+    cur = sdb.cursor()
+    cur.execute("SELECT key FROM songs WHERE name=? AND artist=?", (sname, artist))
+    return cur.fetchone()[0]
