@@ -1,7 +1,5 @@
 .DS_Store
 *.pyc
-playdata/*
-cache/*
 old
-*_pb2*
 *.swp
+data/
