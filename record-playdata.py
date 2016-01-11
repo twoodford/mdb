@@ -1,11 +1,19 @@
-#!/usr/bin/which python3.4
+#!/opt/local/bin/python3.5
 # import-playdata.py
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 #
 # Move play data to sqlite3 database
 
+import calendar
 import plistlib
 import sqlite3
+import time
+
+from mdb import util
+
+# The following note applies to much of the code below:
+# Shamelessly copied from itunes-record.py in the hope that the old ways may eventually disappear
+# Please ignore the occasional snark in the comments.
 
 def db_init(db):
     cur = db.cursor()
@@ -38,11 +46,47 @@ def songdat_recorder(db):
             pass
     return _record
 
+def play_recorder(db):
+    cur = db.cursor()
+    def _record(song):
+        try:
+            # Unfortunately, "Play Date UTC" doesn't seem to actually mean the UTC part
+            # This is actually "UTC-but-it-changes-with-daylight-savings-time"
+            # Yeah.
+            # UTC.
+            # Right.
+            tmn = calendar.timegm(song["Play Date UTC"].utctimetuple())
+            if time.localtime().tm_isdst:
+                tmn += 60*60 # So dumb, Apple
+            sid = int(song["Persistent ID"], 16)
+            nm = song["Name"]
+            artist = song["Artist"]
+            # Get song key
+            try:
+                key = util.sname_artist_to_key(nm, artist, db)
+            except TypeError:
+                # Didn't find anything!
+                print("Error: couldn't find song "+nm+" by "+artist)
+                return
+            # Check if this play has already been recorded
+            cur.execute("SELECT * FROM plays WHERE song=? AND datetime=?", (key, tmn))
+            if len(cur.fetchall()) == 0:
+                print(song["Name"]+" got played at "+str(song["Play Date UTC"]))
+                # Record play data
+                cur.execute("INSERT INTO plays(song, datetime) VALUES (?, ?)", (key, tmn))
+        except KeyError:
+            pass
+    return _record
+
 def import_songdata(db):
     _record = songdat_recorder(db)
-    proclib("/Users/timothy/Music/iTunes/iTunes Library.xml", (_record,))
+    proclib("/Users/tim/Music/iTunes/iTunes Music Library.xml", (_record,))
 
-# Shamelessly copied from itunes-record.py in the hope that the old ways may eventually disappear
+def collect_playdata(db):
+    _record = play_recorder(db)
+    proclib("/Users/tim/Music/iTunes/iTunes Music Library.xml", (_record,))
+    db.commit()
+
 def proclib(fname, callbacks):
     with open(fname, "rb") as libf:
         lib = plistlib.readPlist(libf)
@@ -65,6 +109,8 @@ if __name__=="__main__":
         db_init(db)
     elif cmd=="songs":
         import_songdata(db)
+    elif cmd=="plays":
+        collect_playdata(db)
     else:
         print("Usage: record-playdata.py [command]")
         print("Commands:")
