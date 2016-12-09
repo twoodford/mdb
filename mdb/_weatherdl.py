@@ -56,7 +56,7 @@ def _parse_wunderground_xml(inxml, db):
 
 def _parse_nws_html(inxml, db):
     "Add new NWS data from the XML string to the database"
-    soup = BeautifulSoup(inxml)
+    soup = BeautifulSoup(inxml, "html.parser")
     # datetime parsing setup
     cutoff_day = datetime.datetime.now().day
     current_mo = datetime.datetime.now().month
