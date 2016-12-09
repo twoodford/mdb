@@ -98,6 +98,9 @@ def proclib(fname, callbacks):
         try:
             if song["TV Show"]: continue
         except KeyError: pass
+        try:
+            if song["iTunesU"]: continue
+        except KeyError: pass
         for callback in callbacks:
             callback(song)
 
@@ -116,5 +119,6 @@ if __name__=="__main__":
         print("Commands:")
         print(" * initdb")
         print(" * songs")
+        print(" * plays")
     db.close()
 
