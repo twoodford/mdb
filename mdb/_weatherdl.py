@@ -122,6 +122,8 @@ def _simplify_conditions(conditions):
         return "sunny"
     elif conditions.find("Fair") != -1:
         return "sunny"
+    elif conditions.find("Thunderstorm") != -1:
+        return "rain"
     else:
         print("WARN: Unrecognised condition "+conditions)
         return "?"
