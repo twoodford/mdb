@@ -1,4 +1,4 @@
-#!/opt/local/bin/python3.5
+#!/opt/local/bin/python3.6
 # import-playdata.py
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 #
@@ -6,6 +6,7 @@
 
 import calendar
 import plistlib
+import os
 import sqlite3
 import time
 
@@ -41,23 +42,32 @@ def songdat_recorder(db):
             # See if we can add the genre, too
             genre = song["Genre"]
             cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
+            try: album=song["Album"]
+            except KeyError: album="unknown"
+            print("add", nm, ":", art, ":", album)
             db.commit()
         except KeyError:
             pass
     return _record
 
-def play_recorder(db):
+def play_recorder(db, min_time):
+    "Only considers play times after min_time"
     cur = db.cursor()
     def _record(song):
         try:
             # Unfortunately, "Play Date UTC" doesn't seem to actually mean the UTC part
-            # This is actually "UTC-but-it-changes-with-daylight-savings-time"
+            # This is actually "UTC-but-it-changes-with-timezone"
             # Yeah.
             # UTC.
             # Right.
             tmn = calendar.timegm(song["Play Date UTC"].utctimetuple())
+            if tmn < min_time:
+                return
             if time.localtime().tm_isdst:
                 tmn += 60*60 # So dumb, Apple
+            # For historical reasons (read: my ignorance), we normalize times to EST (not EDT)
+            # For practical reasons, we need to make sure 
+            tmn += time.localtime().tm_gmtoff
             sid = int(song["Persistent ID"], 16)
             nm = song["Name"]
             artist = song["Artist"]
@@ -70,8 +80,10 @@ def play_recorder(db):
                 return
             # Check if this play has already been recorded
             cur.execute("SELECT * FROM plays WHERE song=? AND datetime=?", (key, tmn))
-            if len(cur.fetchall()) == 0:
-                print(song["Name"]+" got played at "+str(song["Play Date UTC"]))
+            x=len(cur.fetchall())
+            if x == 0:
+                print(str(song["Name"].encode(), 'ascii', 'ignore')+" got played at "+time.asctime(time.gmtime(tmn)))
+                print(tmn)
                 # Record play data
                 cur.execute("INSERT INTO plays(song, datetime) VALUES (?, ?)", (key, tmn))
         except KeyError:
@@ -83,7 +95,11 @@ def import_songdata(db):
     proclib("/Users/tim/Music/iTunes/iTunes Music Library.xml", (_record,))
 
 def collect_playdata(db):
-    _record = play_recorder(db)
+    mtime = os.stat("data/music.sqlite3").st_mtime
+    mtime -= 24*60*60*5
+    print(mtime)
+    print(time.asctime(time.gmtime(mtime)))
+    _record = play_recorder(db, mtime)
     proclib("/Users/tim/Music/iTunes/iTunes Music Library.xml", (_record,))
     db.commit()
 
@@ -93,7 +109,11 @@ def proclib(fname, callbacks):
     for songid in lib["Tracks"]:
         song = lib["Tracks"][songid]
         try:
-            if song["Podcast"]: continue
+            if song["Podcast"]:
+                try:
+                    if song["Location"].count("Podcast") > 0: continue
+                    if song["Track Type"] != "File": continue
+                except KeyError: continue
         except KeyError: pass
         try:
             if song["TV Show"]: continue
