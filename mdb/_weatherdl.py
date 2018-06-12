@@ -31,7 +31,7 @@ class _WundergroundHandler(xml.sax.handler.ContentHandler):
 
     def _finalize_obs(self):
         if self.debug:
-            print("DEBUG: "+str(self.obsdata["observation_time_rfc822"]))
+            print("DEBUG: ", str(self.obsdata["observation_time_rfc822"]))
             print("DEBUG: temp_c="+self.obsdata["temp_c"])
             print("DEBUG: pressure_mb="+self.obsdata["pressure_mb"])
             print("DEBUG: precip_1hr="+self.obsdata["precip_1hr_metric"])
@@ -40,7 +40,7 @@ class _WundergroundHandler(xml.sax.handler.ContentHandler):
         tm = datetime.datetime.fromtimestamp(email.utils.mktime_tz(tm_1))
         cur = self.conn.cursor()
         cur.execute("SELECT * FROM basic_weather WHERE time=?", (tm.timestamp(),))
-        if len(cur.fetchall()) < 0: # cur.rowcount doesn't seem to work for this
+        if len(cur.fetchall()) == 0: # cur.rowcount doesn't seem to work for this
             temp_c = float(self.obsdata["temp_c"])
             pressure = float(self.obsdata["pressure_mb"])
             precip = float(self.obsdata["precip_1hr_metric"].split(" ")[0])
@@ -83,7 +83,7 @@ def _parse_nws_html(inxml, db):
                 dt = _infer_datetime(cutoff_day, current_mo, current_yr, day_of_month, time)
                 if wind[0] == "Calm" or wind[0] == "NA":
                     wind.append(0)
-                #DBG print("DEBUG: "+str(dt)+": "+str(wind)+" "+conditions+" "+simple_cond+" "+str(sky_cond))
+                #DBG print("DEBUG: "+str(dt)+" "+str(dt.timestamp())+": "+str(wind)+" "+conditions+" "+simple_cond+" "+str(sky_cond))
                 cur.execute("SELECT * FROM nws_weather WHERE time=?", (dt.timestamp(),))
                 if len(cur.fetchall()) > 0: # cur.rowcount doesn't seem to work for this
                     continue
@@ -93,6 +93,7 @@ def _parse_nws_html(inxml, db):
                 else:
                     cloud_cover = float(sky_cond[0][1])/10
 
+                print((dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
                 cur.execute("INSERT INTO nws_weather VALUES (?,?,?,?,?)", 
                     (dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
             except ValueError as e:
@@ -119,7 +120,10 @@ def _simplify_conditions(conditions):
         return "sunny"
     elif conditions.find("Clear") != -1:
         return "sunny"
+    elif conditions.find("Fair") != -1:
+        return "sunny"
     else:
+        print("WARN: Unrecognised condition "+conditions)
         return "?"
 
 def _infer_datetime(cutoff_day, current_mo, current_yr, dom_str, time_str):
@@ -139,6 +143,7 @@ def _infer_datetime(cutoff_day, current_mo, current_yr, dom_str, time_str):
 def add_wunderground_data(station_name, db):
     xml_file = urllib.request.urlopen( \
             "http://api.wunderground.com/weatherstation/WXDailyHistory.asp?ID={0}&format=XML".format(station_name))
+    print("http://api.wunderground.com/weatherstation/WXDailyHistory.asp?ID={0}&format=XML".format(station_name))
     _parse_wunderground_xml(xml_file, db)
 
 def add_nws_data(station_name, db):
