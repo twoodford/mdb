@@ -11,7 +11,8 @@ def make_play_graph(sdb, grtype=nx.MultiDiGraph):
     """
     gr = grtype()
     cur = sdb.cursor()
-    cur.execute("SELECT song, datetime FROM plays")
+    # We don't need timezone awareness here - songs that were played close together
+    cur.execute("SELECT song, unixtime FROM plays")
     prev = None
     for row in cur.fetchall():
         if prev:
