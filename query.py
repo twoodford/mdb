@@ -1,4 +1,4 @@
-#!/usr/bin/which python3.4
+#!/usr/bin/which python3.6
 # query.py
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 # Command line query tool for the music database.
