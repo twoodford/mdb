@@ -2,7 +2,8 @@
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 # Interpret past play data to determine which song to start with
 from __future__ import division
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+import time
 from math import log
 
 import mdb.circstats
@@ -33,7 +34,8 @@ def last_play_distance(sdb):
     """ Find the latest play time for each song. Returns dictionary of 
         song ID as key and latest play time as value. """
     tdict = mdb.dtutil.times_dict(sdb)
-    now = datetime.utcnow()
+    utcoffs = time.localtime().tm_gmtoff
+    now = datetime.now(timezone(timedelta(seconds=utcoffs)))
     return {sid: now - max(tdict[sid]) for sid in tdict.keys()}
 
 def play_dens_adjust_lastplay(playdens, lastplay, sdb, weight=0.005):
