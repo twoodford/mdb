@@ -45,11 +45,12 @@ def times_dict(sdb):
     """Creates a dictionary with keys being the SID of a song, and values being
        datetime objects representing play records."""
     cur = sdb.cursor()
-    cur.execute("SELECT song, datetime FROM plays")
+    cur.execute("SELECT song, unixtime, utcoffs FROM plays")
     ret = {}
     for play in cur.fetchall(): 
         if not play[0] in ret: ret[play[0]] = []
-        ret[play[0]].append(datetime.datetime.utcfromtimestamp(play[1]))
+        timez = datetime.timezone(datetime.timedelta(seconds=play[2]))
+        ret[play[0]].append(datetime.datetime.fromtimestamp(play[1], tz=timez))
     return ret
 
 def _test():
