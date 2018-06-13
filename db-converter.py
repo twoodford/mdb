@@ -19,7 +19,8 @@ def do_migration(db):
                         utcoffs integer,
                         FOREIGN KEY(song) REFERENCES songs(key)
                 )""")
-    for row in cur.execute("SELECT pkey, song, datetime FROM old_plays"):
+    cur.execute("SELECT pkey, song, datetime FROM old_plays")
+    for row in cur.fetchall():
         (pkey, song, timeval) = row
         # timevalue EST -> UTC
         timeval -= utcoffs
