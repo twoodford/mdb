@@ -2,8 +2,9 @@
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 # Interpret past play data to determine which song to start with
 from __future__ import division
-from datetime import datetime
+from datetime import datetime, timedelta
 from math import log
+import operator
 
 import mdb.circstats
 import mdb.dtutil
@@ -54,6 +55,52 @@ def get_start_points(sdb):
     # Sort by proximity to current day of week and time
     start_point = list(dens.keys()) # Could try to narrow some stuff down here
     start_point.sort(key=lambda x: dens[x], reverse=True)
-    for point in start_point[:10]:
-        print(mdb.util.key_to_string(point, sdb)+": "+str(dens[point]))
+    #for point in start_point[:10]:
+    #    print(mdb.util.key_to_string(point, sdb)+": "+str(dens[point]))
     return start_point
+
+
+def _collect_songs(playids, mdbdb):
+    cur = mdbdb.cursor()
+    songs = {}
+    for playid in playids:
+        cur.execute("SELECT song FROM plays WHERE pkey=?", (playid[0],))
+        try:
+            (songid,) = cur.fetchone()
+        except TypeError: # Nothing here
+            #print("Warn: could not find play")
+            continue
+        try:
+            songs[songid] += 1
+        except KeyError:
+            songs[songid] = 1
+    cur.close()
+    return sorted(songs.items(), key=operator.itemgetter(1), reverse=True)
+
+def get_weather_dens(weather_db, sdb):
+    cur = weather_db.cursor()
+
+    # Get current conditions
+    mintime = (datetime.now() - timedelta(days=2)).timestamp()
+    cur.execute("SELECT * FROM basic_weather WHERE time > ? ORDER BY time DESC", (mintime,))
+    (temp,pressure,precip) = cur.fetchone()[1:]
+    cur.execute("SELECT * FROM nws_weather WHERE time > ? ORDER BY time DESC", (mintime,))
+    (sky,cloudcover,weathertype) = cur.fetchone()[1:4]
+    
+    # Stage 1: Matching plays for ballpark temperature, I think.  I'm having trouble understanding my own SQL.
+    cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE temp_c > ? AND temp_c < ?", (temp-5, temp+5))
+    fun = cur.fetchall()
+
+    # Stage 2: Look for plays that occurred during similar weather
+    if weathertype != "?":
+        cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE nws.weathertype=?", (weathertype,))
+        morefun = cur.fetchall()
+    else:
+        morefun = []
+
+    # Combine them
+    seed = _collect_songs(morefun+fun, sdb)
+    # I was doing this instead in the script.  May call for more investigation.
+    #seed = collect_songs(morefun, mdbdb) 
+
+    return seed
