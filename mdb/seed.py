@@ -34,13 +34,12 @@ def last_play_distance(sdb):
     """ Find the latest play time for each song. Returns dictionary of 
         song ID as key and latest play time as value. """
     tdict = mdb.dtutil.times_dict(sdb)
-    utcoffs = time.localtime().tm_gmtoff
-    now = datetime.now(timezone(timedelta(seconds=utcoffs)))
+    now = mdb.dtutil.now()
     return {sid: now - max(tdict[sid]) for sid in tdict.keys()}
 
 def play_dens_adjust_lastplay(playdens, lastplay, sdb, weight=0.005):
     """ Adjust play density to favor songs that haven't been played 
-        recently.  The adjustment reaches its maximum at 10 months 
+        recently.  The adjustment reaches its maximum at 1 month 
         since last play, which should help avoid excessively boosting 
         songs I don't like much anymore."""
     year_seconds = 60 * 60 * 24 * 30

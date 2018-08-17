@@ -15,7 +15,7 @@ def do_migration(db):
     cur.execute("""CREATE TABLE plays (
                         pkey integer primary key,
                         song integer,
-                        unixtime integer,
+                        unixlocaltime integer,
                         utcoffs integer,
                         FOREIGN KEY(song) REFERENCES songs(key)
                 )""")
@@ -23,7 +23,9 @@ def do_migration(db):
     for row in cur.fetchall():
         (pkey, song, timeval) = row
         # timevalue EST -> UTC
-        timeval -= utcoffs
+        #timeval += utcoffs
+        # Note on how time works with iTunes: the unix epoch is offset for your timezone
+        # This is how iTunes stores times across its databases, so I'm not going to mess with this
         cur.execute("INSERT INTO plays VALUES (?,?,?,?)", (pkey, song, timeval, utcoffs))
     db.commit()
 

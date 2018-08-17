@@ -5,14 +5,14 @@ from datetime import timedelta
 import random
 import networkx as nx
 
-def make_play_graph(sdb, grtype=nx.MultiDiGraph):
+def make_play_graph(sdb, grtype=nx.DiGraph):
     """ Read the play times from sdb and return a NetworkX graph structure with nodes representing songs and 
         edges representing sequential plays.
     """
     gr = grtype()
     cur = sdb.cursor()
     # We don't need timezone awareness here - songs that were played close together
-    cur.execute("SELECT song, unixtime FROM plays")
+    cur.execute("SELECT song, unixlocaltime FROM plays ORDER BY unixlocaltime ASC")
     prev = None
     for row in cur.fetchall():
         if prev:
@@ -66,4 +66,19 @@ def graph_walk(start_key, graph, song_weight=_emptydict(), max_depth=15, iter_de
             break
         sequence.append(choice[1])
         last = sequence[-1]
+    return sequence
+
+def graph_walk_maxocc(start_key, graph, song_weight=_emptydict(), max_depth=15):
+    "Walk the graph by always taking the song that has most frequently been played after the current song"
+    sequence = [start_key]
+    last = start_key
+    while len(sequence) < max_depth:
+        current = sequence[-1]
+        next_ = None
+        for succ in graph.successors(current):
+            print(succ, graph[current][succ]["weight"])
+            if next_ is None or graph[current][next_]["weight"] > graph[current][succ]["weight"]:
+                next_ = succ
+        sequence.append(next_)
+        break
     return sequence

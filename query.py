@@ -3,7 +3,7 @@
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 # Command line query tool for the music database.
 from __future__ import print_function
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 import sqlite3
 
 import mdb.circstats
@@ -12,13 +12,14 @@ import mdb.util
 def dbg_list_times(sname, key, sdb):
     print("Plays of "+sname)
     cur = sdb.cursor()
-    cur.execute("SELECT datetime FROM plays WHERE song=?", (key,))
+    cur.execute("SELECT unixlocaltime, utcoffs FROM plays WHERE song=?", (key,))
     for tm in cur.fetchall():
-        print(str(datetime.utcfromtimestamp(tm[0])))
+        timez = timezone(timedelta(seconds=tm[1]))
+        print(str(datetime.fromtimestamp(tm[0]-tm[1], tz=timez)))
 
 def dbg_list_all_plays(sdb):
     cur = sdb.cursor()
-    cur.execute("SELECT name, datetime FROM plays JOIN songs ON plays.song=songs.key")
+    cur.execute("SELECT name, plays.unixlocaltime FROM plays JOIN songs ON plays.song=songs.key")
     for play in cur.fetchall():
         try:
             print(str(play[0])+": "+str(play[1]))

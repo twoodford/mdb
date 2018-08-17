@@ -4,6 +4,7 @@ from __future__ import print_function
 import datetime
 import math
 import sys
+import time
 
 def time_to_seconds(tm):
     return ((tm.hour*60)+tm.minute)*60+tm.second
@@ -45,13 +46,18 @@ def times_dict(sdb):
     """Creates a dictionary with keys being the SID of a song, and values being
        datetime objects representing play records."""
     cur = sdb.cursor()
-    cur.execute("SELECT song, unixtime, utcoffs FROM plays")
+    cur.execute("SELECT song, unixlocaltime, utcoffs FROM plays")
+    # TODO figure out if we need to mess with the timezone
     ret = {}
     for play in cur.fetchall(): 
         if not play[0] in ret: ret[play[0]] = []
         timez = datetime.timezone(datetime.timedelta(seconds=play[2]))
-        ret[play[0]].append(datetime.datetime.fromtimestamp(play[1], tz=timez))
+        ret[play[0]].append(datetime.datetime.fromtimestamp(play[1]-play[2], tz=timez))
     return ret
+
+def now():
+    utcoffs = time.localtime().tm_gmtoff
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(seconds=utcoffs)))
 
 def _test():
     print(time_difference(datetime.time(hour=2), datetime.time(hour=3)))
