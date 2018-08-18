@@ -21,11 +21,11 @@ ITL_PATH = os.path.expanduser("~/Music/iTunes/iTunes Music Library.xml")
 
 def db_init(db):
     cur = db.cursor()
-    cur.execute("CREATE TABLE songs (key integer primary key, sid blob, name string, artist string, genre string)")
+    cur.execute("CREATE TABLE songs (key integer primary key, sid blob, name string, artist string, genre string, rating integer)")
     cur.execute("""CREATE TABLE plays (
                         pkey integer primary key,
                         song integer,
-                        unixtime integer,
+                        unixlocaltime integer,
                         utcoffs integer,
                         FOREIGN KEY(song) REFERENCES songs(key)
                 )""")
@@ -47,6 +47,7 @@ def db_convert(ndb):
         except IndexError: pass # Song gone bye-bye
     ndb.commit()
 
+
 def songdat_recorder(db):
     cur = db.cursor()
     def _record(song):
@@ -54,14 +55,30 @@ def songdat_recorder(db):
             sid = int(song["Persistent ID"], 16)
             nm = song["Name"]
             art = song["Artist"]
-            cur.execute("SELECT * FROM songs WHERE sid=?", (str(sid),))
+            cur.execute("SELECT name, artist, genre, rating FROM songs WHERE sid=?", (str(sid),))
             # str() is used above to avoid automatic conversion to an sqlite integer.  sids are blobs due to size.
-            if len(cur.fetchall())>0:
-                return # TODO check if we need to do updates
-            cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
-            # See if we can add the genre, too
-            genre = song["Genre"]
-            cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
+            existing = cur.fetchall()
+            if len(existing)>0:
+                #return # TODO check if we need to do updates
+                if str(existing[0][0]) != nm:
+                    print("Name update", nm, existing[0][0], art)
+                    cur.execute("UPDATE songs SET name=? WHERE sid=?", (nm, str(sid)))
+                if str(existing[0][1]) != art:
+                    print("Artist update", nm, existing[0][1], art)
+                    cur.execute("UPDATE songs SET artist=? WHERE sid=?", (art, str(sid)))
+                try:
+                    genre = song["Genre"]
+                    if existing[0][2] != genre:
+                        print("Genre update", nm, existing[0][1], art)
+                        cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
+                except KeyError: pass
+                try:
+                    genre = song["Rating"]
+                    if existing[0][3] != genre:
+                        cur.execute("UPDATE songs SET rating=? WHERE sid=?", (genre, str(sid)))
+                except KeyError: pass
+            else:
+                cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
             db.commit()
         except KeyError:
             pass
@@ -106,7 +123,7 @@ def import_songdata(db):
     proclib(ITL_PATH, (_record,))
 
 def collect_playdata(db):
-    mtime = os.stat("data/music2.sqlite3").st_mtime
+    mtime = os.stat("data/music.sqlite3").st_mtime
     mtime -= 2*24*60*60
     _record = play_recorder(db, mtime)
     proclib(ITL_PATH, (_record,))
