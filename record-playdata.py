@@ -63,8 +63,6 @@ def play_recorder(db, min_time):
             tmn = calendar.timegm(song["Play Date UTC"].utctimetuple())
             if tmn < min_time:
                 return
-            if time.localtime().tm_isdst:
-                tmn += 60*60 # So dumb, Apple
             # For historical reasons (read: my ignorance), we normalize times to EST (not EDT)
             # For practical reasons, we need to make sure 
             tmn += time.localtime().tm_gmtoff
