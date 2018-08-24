@@ -18,16 +18,23 @@ weather_db = sqlite3.connect("data/weather.sqlite3")
 graph = mdb.songgraph.make_play_graph(sdb)
 pdens = mdb.seed.play_density(sdb)
 wdens = mdb.seed.get_weather_dens(weather_db, sdb)
+combo_dens = {}
 
 def update_pdens(schedu, sdb_tl, wdb_tl):
     global wdens
     global pdens
+    global combo_dens
     print("updating")
     if sdb_tl is None or wdb_tl is None:
         sdb_tl = sqlite3.connect("data/music.sqlite3")
         wdb_tl = sqlite3.connect("data/weather.sqlite3")
     pdens = mdb.seed.play_density(sdb_tl)
     wdens = mdb.seed.get_weather_dens(wdb_tl, sdb_tl)
+    combo_dens = {sid: (weather_dens * math.sqrt(pdens[sid])) for (sid, weather_dens) in wdens}
+    for key in pdens:
+        if key not in combo_dens:
+            combo_dens[key] = pdens[key] * 0.02
+    print("done")
     schedu.enter(60, 0, update_pdens, (schedu, sdb_tl, wdb_tl))
 
 def update_pdens_thread():
@@ -58,7 +65,7 @@ class MDBRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(self._encode_song_list(songkeys))
         elif self.path.startswith("/graphcrawl"):
             sel_song = int(self.path.split("?")[1])
-            lst = mdb.songgraph.graph_walk(sel_song, graph, pdens)
+            lst = mdb.songgraph.graph_walk(sel_song, graph, combo_dens)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(self._encode_song_list(lst))
