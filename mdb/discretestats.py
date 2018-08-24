@@ -29,8 +29,7 @@ def discretize(values, minimum, bucket_size):
         An array of buckets, with each array value indicating 
         the number of input values that fell into the bucket.
     """
-    vals = list(values)
-    vals.sort()
+    vals = sorted(values)
     if len(vals) == 0:
         return [0]
     elif vals[0] < minimum:
