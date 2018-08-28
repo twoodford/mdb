@@ -48,46 +48,43 @@ def db_convert(ndb):
     ndb.commit()
 
 
-def songdat_recorder(db):
-    cur = db.cursor()
-    def _record(song):
-        try:
-            sid = int(song["Persistent ID"], 16)
-            nm = song["Name"]
-            art = song["Artist"]
-            cur.execute("SELECT name, artist, genre, rating FROM songs WHERE sid=?", (str(sid),))
-            # str() is used above to avoid automatic conversion to an sqlite integer.  sids are blobs due to size.
-            existing = cur.fetchall()
-            if len(existing)>0:
-                #return # TODO check if we need to do updates
-                if str(existing[0][0]) != nm:
-                    print("Name update", nm, existing[0][0], art)
-                    cur.execute("UPDATE songs SET name=? WHERE sid=?", (nm, str(sid)))
-                if str(existing[0][1]) != art:
-                    print("Artist update", nm, existing[0][1], art)
-                    cur.execute("UPDATE songs SET artist=? WHERE sid=?", (art, str(sid)))
-                try:
-                    genre = song["Genre"]
-                    if existing[0][2] != genre:
-                        print("Genre update", nm, existing[0][1], art)
-                        cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
-                except KeyError: pass
-                try:
-                    genre = song["Rating"]
-                    if existing[0][3] != genre:
-                        cur.execute("UPDATE songs SET rating=? WHERE sid=?", (genre, str(sid)))
-                except KeyError: pass
-            else:
-                cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
-            db.commit()
-        except KeyError:
-            pass
-    return _record
+def _record_song_info(song, cur):
+    try:
+        sid = int(song["Persistent ID"], 16)
+        nm = song["Name"]
+        art = song["Artist"]
+        cur.execute("SELECT name, artist, genre, rating FROM songs WHERE sid=?", (str(sid),))
+        # str() is used above to avoid automatic conversion to an sqlite integer.  sids are blobs due to size.
+        existing = cur.fetchall()
+        if len(existing)>0:
+            if str(existing[0][0]) != nm:
+                print("Name update", nm, existing[0][0], art)
+                cur.execute("UPDATE songs SET name=? WHERE sid=?", (nm, str(sid)))
+            if str(existing[0][1]) != art:
+                print("Artist update", nm, existing[0][1], art)
+                cur.execute("UPDATE songs SET artist=? WHERE sid=?", (art, str(sid)))
+            try:
+                genre = song["Genre"]
+                if existing[0][2] != genre:
+                    print("Genre update", nm, existing[0][1], art)
+                    cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
+            except KeyError: pass
+            try:
+                genre = song["Rating"]
+                if existing[0][3] != genre:
+                    cur.execute("UPDATE songs SET rating=? WHERE sid=?", (genre, str(sid)))
+            except KeyError: pass
+        else:
+            cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
+        db.commit()
+    except KeyError:
+        pass
 
 def play_recorder(db, min_time):
     "Only considers play times after min_time"
     cur = db.cursor()
     def _record(song):
+        _record_song_info(song, cur)
         try:
             # Play Date defined with regards to HFS epoch shifted to local timezone
             tmn = int(song["Play Date"]) - 2082844800
