@@ -5,6 +5,7 @@
 # Move play data to sqlite3 database
 
 import calendar
+import datetime
 import plistlib
 import os
 import os.path
@@ -21,9 +22,16 @@ ITL_PATH = os.path.expanduser("~/Music/iTunes/iTunes Music Library.xml")
 
 def db_init(db):
     cur = db.cursor()
-    cur.execute("CREATE TABLE songs (key integer primary key, sid blob, name string, artist string, genre string, rating integer)")
-    cur.execute("""CREATE TABLE plays (
+    cur.execute("CREATE TABLE IF NOT EXISTS songs (key integer primary key, sid blob, name string, artist string, genre string, rating integer)")
+    cur.execute("""CREATE TABLE IF NOT EXISTS plays (
                         pkey integer primary key,
+                        song integer,
+                        unixlocaltime integer,
+                        utcoffs integer,
+                        FOREIGN KEY(song) REFERENCES songs(key)
+                )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS skips (
+                        skey integer primary key,
                         song integer,
                         unixlocaltime integer,
                         utcoffs integer,
@@ -76,8 +84,7 @@ def _record_song_info(song, cur):
     else:
         cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
 
-def _record_song_play(song, cur):
-    sid = int(song["Persistent ID"], 16)
+def _record_song_play(song, min_time, cur):
     nm = song["Name"]
     artist = song["Artist"]
     # Play Date defined with regards to HFS epoch shifted to local timezone
@@ -99,13 +106,47 @@ def _record_song_play(song, cur):
         # Record play data
         cur.execute("INSERT INTO plays(song, unixlocaltime, utcoffs) VALUES (?, ?, ?)", (key, tmn, time.localtime().tm_gmtoff))
 
+def _record_song_skip(song, cur):
+    nm = song["Name"]
+    artist = song["Artist"]
+    # Get song key
+    try:
+        key = util.sname_artist_to_key(nm, artist, db)
+    except TypeError:
+        # Didn't find anything!
+        print("Error: couldn't find song "+nm+" by "+artist)
+        return
+    # Apple's understanding of time appears to be complete garbage
+    # The recorded time starts out being UTC, but then shifts around with the time zone
+    # But here's the weird thing: converting "UTC" to your local time zone always gives the correct result!
+    # So I skipped a song at 14:30 local time
+    # 18:30:33Z in UTC-4 timezone -> 14:30 local
+    # I then switch to UTC+1 (London summer time)
+    # 13:30:33Z -> 14:30 local still
+    # :(
+    try:
+        tmn = song["Skip Date"]
+        offset = time.localtime().tm_gmtoff
+        tmn += datetime.timedelta(seconds=offset)
+        tstamp = calendar.timegm(tmn.utctimetuple())
+        # Check if this play has already been recorded
+        cur.execute("SELECT * FROM skips WHERE song=? AND unixlocaltime=?", (key, tstamp))
+        if len(cur.fetchall()) == 0:
+            print(str(song["Name"].encode(), 'ascii', 'ignore')+" got skipped at "+time.asctime(time.gmtime(tstamp)))
+            # Record play data
+            cur.execute("INSERT INTO skips(song, unixlocaltime, utcoffs) VALUES (?, ?, ?)", (key, tstamp, offset))
+    except KeyError:
+        pass
+
+
 def play_recorder(db, min_time):
     "Only considers play times after min_time"
     cur = db.cursor()
     def _record(song):
         try:
             _record_song_info(song, cur)
-            _record_song_play(song, cur)
+            _record_song_play(song, min_time, cur)
+            _record_song_skip(song, cur)
             db.commit()
         except KeyError:
             pass
