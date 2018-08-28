@@ -49,68 +49,64 @@ def db_convert(ndb):
 
 
 def _record_song_info(song, cur):
+    sid = int(song["Persistent ID"], 16)
+    nm = song["Name"]
+    art = song["Artist"]
+    cur.execute("SELECT name, artist, genre, rating FROM songs WHERE sid=?", (str(sid),))
+    # str() is used above to avoid automatic conversion to an sqlite integer.  sids are blobs due to size.
+    existing = cur.fetchall()
+    if len(existing)>0:
+        if str(existing[0][0]) != nm:
+            print("Name update", nm, existing[0][0], art)
+            cur.execute("UPDATE songs SET name=? WHERE sid=?", (nm, str(sid)))
+        if str(existing[0][1]) != art:
+            print("Artist update", nm, existing[0][1], art)
+            cur.execute("UPDATE songs SET artist=? WHERE sid=?", (art, str(sid)))
+        try:
+            genre = song["Genre"]
+            if existing[0][2] != genre:
+                print("Genre update", nm, existing[0][1], art)
+                cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
+        except KeyError: pass
+        try:
+            genre = song["Rating"]
+            if existing[0][3] != genre:
+                cur.execute("UPDATE songs SET rating=? WHERE sid=?", (genre, str(sid)))
+        except KeyError: pass
+    else:
+        cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
+
+def _record_song_play(song, cur):
+    sid = int(song["Persistent ID"], 16)
+    nm = song["Name"]
+    artist = song["Artist"]
+    # Play Date defined with regards to HFS epoch shifted to local timezone
+    tmn = int(song["Play Date"]) - 2082844800
+    if tmn < min_time:
+        return
+    # Get song key
     try:
-        sid = int(song["Persistent ID"], 16)
-        nm = song["Name"]
-        art = song["Artist"]
-        cur.execute("SELECT name, artist, genre, rating FROM songs WHERE sid=?", (str(sid),))
-        # str() is used above to avoid automatic conversion to an sqlite integer.  sids are blobs due to size.
-        existing = cur.fetchall()
-        if len(existing)>0:
-            if str(existing[0][0]) != nm:
-                print("Name update", nm, existing[0][0], art)
-                cur.execute("UPDATE songs SET name=? WHERE sid=?", (nm, str(sid)))
-            if str(existing[0][1]) != art:
-                print("Artist update", nm, existing[0][1], art)
-                cur.execute("UPDATE songs SET artist=? WHERE sid=?", (art, str(sid)))
-            try:
-                genre = song["Genre"]
-                if existing[0][2] != genre:
-                    print("Genre update", nm, existing[0][1], art)
-                    cur.execute("UPDATE songs SET genre=? WHERE sid=?", (genre, str(sid)))
-            except KeyError: pass
-            try:
-                genre = song["Rating"]
-                if existing[0][3] != genre:
-                    cur.execute("UPDATE songs SET rating=? WHERE sid=?", (genre, str(sid)))
-            except KeyError: pass
-        else:
-            cur.execute("INSERT INTO songs(sid, name, artist) VALUES (?,?,?)", (str(sid), nm, art))
-        db.commit()
-    except KeyError:
-        pass
+        key = util.sname_artist_to_key(nm, artist, db)
+    except TypeError:
+        # Didn't find anything!
+        print("Error: couldn't find song "+nm+" by "+artist)
+        return
+
+    # Check if this play has already been recorded
+    cur.execute("SELECT * FROM plays WHERE song=? AND unixlocaltime=?", (key, tmn))
+    if len(cur.fetchall()) == 0:
+        print(str(song["Name"].encode(), 'ascii', 'ignore')+" got played at "+time.asctime(time.gmtime(tmn)))
+        # Record play data
+        cur.execute("INSERT INTO plays(song, unixlocaltime, utcoffs) VALUES (?, ?, ?)", (key, tmn, time.localtime().tm_gmtoff))
 
 def play_recorder(db, min_time):
     "Only considers play times after min_time"
     cur = db.cursor()
     def _record(song):
-        _record_song_info(song, cur)
         try:
-            # Play Date defined with regards to HFS epoch shifted to local timezone
-            tmn = int(song["Play Date"]) - 2082844800
-            if tmn < min_time:
-                return
-            sid = int(song["Persistent ID"], 16)
-            nm = song["Name"]
-            artist = song["Artist"]
-            # Get song key
-            try:
-                key = util.sname_artist_to_key(nm, artist, db)
-            except TypeError:
-                # Didn't find anything!
-                print("Error: couldn't find song "+nm+" by "+artist)
-                return
-
-            #DBG
-            #cur.execute("SELECT * FROM plays WHERE song=?", (key,))
-            #for x in cur.fetchall():
-            #    print(x)
-            # Check if this play has already been recorded
-            cur.execute("SELECT * FROM plays WHERE song=? AND unixlocaltime=?", (key, tmn))
-            if len(cur.fetchall()) == 0:
-                print(str(song["Name"].encode(), 'ascii', 'ignore')+" got played at "+time.asctime(time.gmtime(tmn)))
-                # Record play data
-                cur.execute("INSERT INTO plays(song, unixlocaltime, utcoffs) VALUES (?, ?, ?)", (key, tmn, time.localtime().tm_gmtoff))
+            _record_song_info(song, cur)
+            _record_song_play(song, cur)
+            db.commit()
         except KeyError:
             pass
     return _record
