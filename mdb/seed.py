@@ -22,11 +22,6 @@ def play_density(sdb):
     current_dow = datetime.now().weekday()
     # Prepare the stats
     tdict = mdb.dtutil.times_dict(sdb)
-    pre = mdb.circstats.preproc_timeofday
-    post = mdb.circstats.postproc_timeofday
-    avgs = mdb.circstats.stat_to_dict(tdict, mdb.circstats.stat_avg(pre, post))
-    sdevs = mdb.circstats.stat_to_dict(tdict, \
-            mdb.circstats.stat_stddev(pre, mdb.circstats.postproc_timedelta))
     return {key: mdb.dtutil.day_of_week_density(tdict[key])[current_dow] * \
             mdb.dtutil.time_local_density(now, tdict[key])
             for key in tdict.keys()}
@@ -56,8 +51,8 @@ def get_start_points(sdb):
     # Sort by proximity to current day of week and time
     start_point = list(dens.keys()) # Could try to narrow some stuff down here
     start_point.sort(key=lambda x: dens[x], reverse=True)
-    #for point in start_point[:10]:
-    #    print(mdb.util.key_to_string(point, sdb)+": "+str(dens[point]))
+    for point in start_point[:10]:
+        print(mdb.util.key_to_string(point, sdb)+": "+str(dens[point]))
     return start_point
 
 
