@@ -7,6 +7,7 @@ import operator
 import sqlite3
 import time
 
+import mdb.dtutil
 import mdb.seed
 import mdb.util
 
@@ -30,30 +31,28 @@ def collect_songs(playids, mdbdb):
 if __name__=="__main__":
     # Note: requires recent weather in weather.sqlite
     wdb = sqlite3.connect("data/weather.sqlite3")
-    cur = wdb.cursor()
-    mintime = (datetime.datetime.now() - datetime.timedelta(days=2)).timestamp()
-    cur.execute("SELECT * FROM basic_weather WHERE time > ? ORDER BY time DESC", (mintime,))
-    (temp,pressure,precip) = cur.fetchone()[1:]
-    cur.execute("SELECT * FROM nws_weather WHERE time > ? ORDER BY time DESC", (mintime,))
-    (sky,cloudcover,weathertype) = cur.fetchone()[1:4]
-
     mdbdb = sqlite3.connect("data/music.sqlite3")
-    cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE temp_c > ? AND temp_c < ?", (temp-5, temp+5))
-    fun = cur.fetchall()
-    print(len(fun))
-    print(weathertype)
-    if weathertype != "?":
-        cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE nws.weathertype=?", (weathertype,))
-        morefun = cur.fetchall()
-    else:
-        morefun = []
-    print(len(morefun))
-    #seed = collect_songs(morefun+fun, mdbdb)
-    seed = collect_songs(morefun, mdbdb)
+    times_dict = mdb.dtutil.times_dict(mdbdb)
+    wdens = mdb.seed.get_weather_dens(wdb, mdbdb)
+    #wdens = collect_songs(morefun, mdbdb)
     # Revise with time-based play densities
-    pdens = mdb.seed.play_density(mdbdb)
-    revised = sorted([(sid, weather_dens * math.sqrt(pdens[sid])) for (sid, weather_dens) in seed[:100]], key=operator.itemgetter(1), reverse=True)
-    [print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in seed[:15]]
+    pdens = mdb.seed.play_times_density(times_dict)
+    combo_dens = mdb.seed.keywise_mult(wdens, pdens)
+    for key in pdens:
+        if key not in combo_dens:
+            combo_dens[key] = pdens[key] * 0.05
+    # Mix it up...
+    # Plays adjuster
+    plays_adj = mdb.seed.num_plays_adjustment(times_dict, weight=0.4)
+    combo_dens = mdb.seed.keywise_mult(combo_dens, plays_adj)
+    # Rating adjuster
+    rating_adj = mdb.seed.rating_adjustment(mdbdb, weight=0.8)
+    combo_dens = mdb.seed.keywise_mult(combo_dens, rating_adj)
+    # Recentness - has to go last for now 'cause it's funky
+    lplay_dist = mdb.seed.last_play_distance(times_dict)
+    #combo_dens = mdb.seed.play_dens_adjust_lastplay(combo_dens, lplay_dist, mdbdb, 28/365)
+    revised = sorted([(key, combo_dens[key]) for key in combo_dens], key=operator.itemgetter(1), reverse=True)
+    #[print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in wdens[:15]]
     print("alternate")
     [print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in revised[:15]]
 

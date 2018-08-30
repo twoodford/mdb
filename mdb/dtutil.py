@@ -33,6 +33,15 @@ def time_local_density(tmc, other_tm):
                 return sys.maxsize
         return sum([_td(otm) for otm in other_tm])/(len(other_tm))**0.8
 
+def time_local_density_smoothed(tmc, other_tm, smooth_param=900):
+    if len(other_tm) == 0:
+        return 0
+    else:
+        def _td(otm):
+            td = time_difference(tmc, otm).total_seconds()
+            return 1/(td + smooth_param)
+        return sum([_td(otm) for otm in other_tm])/(1+len(other_tm))
+
 def day_of_week_density(tlist):
     dow = [x.weekday() for x in tlist]
     ret = [0, 0, 0, 0, 0, 0, 0]
