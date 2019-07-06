@@ -9,6 +9,7 @@ import time
 
 import mdb.dtutil
 import mdb.seed
+import mdb.songgraph
 import mdb.util
 
 def collect_songs(playids, mdbdb):
@@ -33,6 +34,8 @@ if __name__=="__main__":
     wdb = sqlite3.connect("data/weather.sqlite3")
     mdbdb = sqlite3.connect("data/music.sqlite3")
     times_dict = mdb.dtutil.times_dict(mdbdb)
+    skips_dict = mdb.dtutil.times_dict(mdbdb, table="skips")
+    graph = mdb.songgraph.make_play_graph(mdbdb)
     wdens = mdb.seed.get_weather_dens(wdb, mdbdb)
     #wdens = collect_songs(morefun, mdbdb)
     # Revise with time-based play densities
@@ -43,16 +46,28 @@ if __name__=="__main__":
             combo_dens[key] = pdens[key] * 0.05
     # Mix it up...
     # Plays adjuster
-    plays_adj = mdb.seed.num_plays_adjustment(times_dict, weight=0.4)
+    plays_adj = mdb.seed.num_plays_adjustment(times_dict, weight=0.01)
     combo_dens = mdb.seed.keywise_mult(combo_dens, plays_adj)
     # Rating adjuster
     rating_adj = mdb.seed.rating_adjustment(mdbdb, weight=0.8)
     combo_dens = mdb.seed.keywise_mult(combo_dens, rating_adj)
     # Recentness - has to go last for now 'cause it's funky
     lplay_dist = mdb.seed.last_play_distance(times_dict)
-    #combo_dens = mdb.seed.play_dens_adjust_lastplay(combo_dens, lplay_dist, mdbdb, 28/365)
+    combo_dens = mdb.seed.play_dens_adjust_lastplay(combo_dens, lplay_dist, mdbdb, 28/365)
+    # Randomise it a bit, 'cause why not
+    mdb.seed.randomise_seeds(combo_dens, sigma=0.03)
     revised = sorted([(key, combo_dens[key]) for key in combo_dens], key=operator.itemgetter(1), reverse=True)
-    #[print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in wdens[:15]]
+    #[print(mdb.util.key_to_string(song, mdbdb)) for song in wdens]
     print("alternate")
     [print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in revised[:15]]
+
+    sel_song = revised[0][0]
+    sel_song = 3274
+    #print("forward walk test")
+    #fw_walk = mdb.songgraph.graph_walk(revised[0][0], graph, combo_dens)
+    #[print(mdb.util.key_to_string(song, mdbdb)) for song in fw_walk]
+
+    print("alternate walk test")
+    alt1_walk = mdb.songgraph.graph_walk_dual(revised[0][0], graph, combo_dens)
+    #[print(mdb.util.key_to_string(song, mdbdb)) for song in alt1_walk]
 

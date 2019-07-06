@@ -46,8 +46,11 @@ def possible_routes(start_key, graph, maxdepth, _visited=None):
     return ret
 
 class _emptydict(object):
+    def __init__(self, default_value=1):
+        self.val = default_value
+
     def __getitem__(self, index):
-        return 1
+        return self.val
 
 def graph_walk(start_key, graph, song_weight=_emptydict(), max_depth=15, iter_depth=3, mean_selection_index=5):
     sequence = [start_key]
@@ -67,6 +70,42 @@ def graph_walk(start_key, graph, song_weight=_emptydict(), max_depth=15, iter_de
         sequence.append(choice[1])
         last = sequence[-1]
     return sequence
+
+
+def graph_walk_dual(start_key, graph, song_weight=_emptydict(0.05), max_len=30):
+    """Like graph_walk_maxocc, but tries to go in reverse as well as forward along the graph.
+    Except if song_weight is set, in which case weights are adjusted by the song weights."""
+    if start_key not in graph: return [start_key]
+    seq = [start_key]
+    while len(seq) < max_len:
+        end = seq[-1]
+        start = seq[0]
+        sweigh = lambda x: song_weight[x] if song_weight[x] > 0 else 0.000000001
+        cand_end = [x for x in graph.successors(end) if x not in seq]
+        end_possible = [(x, graph[end][x]["weight"]/sweigh(x)) for x in cand_end]
+        end_possible.sort(key=lambda x: x[1], reverse=False)
+        cand_begin = [x for x in graph.predecessors(start) if x not in seq]
+        begin_possible = [(x, graph[x][start]["weight"]/sweigh(x)) for x in cand_begin]
+        begin_possible.sort(key=lambda x: x[1], reverse=False)
+        if len(end_possible) > 0:
+            if len(begin_possible) > 0:
+                # Both have at least 1 item
+                if end_possible[0][1] > begin_possible[0][1]:
+                    # Append to end - end is better
+                    seq.append(end_possible[0][0])
+                else:
+                    # Insert at beginning - beginning is better
+                    seq.insert(0, begin_possible[0][0])
+            else:
+                # Have end possibility, but no beginning possibility
+                seq.append(end_possible[0][0])
+        elif len(begin_possible) > 0:
+            # Have beginning possibility, but no end
+            seq.insert(0, begin_possible[0][0])
+        else:
+            # No possibilities at all :(
+            break
+    return seq
 
 def graph_walk_maxocc(start_key, graph, song_weight=_emptydict(), max_depth=15):
     "Walk the graph by always taking the song that has most frequently been played after the current song"

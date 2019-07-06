@@ -38,6 +38,7 @@ def time_local_density_smoothed(tmc, other_tm, smooth_param=900):
         return 0
     else:
         def _td(otm):
+            if otm.year < 2017: return 0
             td = time_difference(tmc, otm).total_seconds()
             return 1/(td + smooth_param)
         return sum([_td(otm) for otm in other_tm])/(1+len(other_tm))
@@ -51,11 +52,13 @@ def day_of_week_density(tlist):
         ret[item] += 1
     return [x/len(dow) for x in ret]
 
-def times_dict(sdb):
+def times_dict(sdb, table="plays"):
     """Creates a dictionary with keys being the SID of a song, and values being
-       datetime objects representing play records."""
+       datetime objects representing play records.
+       The db parameter SHOULD NOT come from user input unless you like SQL 
+       injections."""
     cur = sdb.cursor()
-    cur.execute("SELECT song, unixlocaltime, utcoffs FROM plays")
+    cur.execute("SELECT song, unixlocaltime, utcoffs FROM {0}".format(table))
     # TODO figure out if we need to mess with the timezone
     ret = {}
     for play in cur.fetchall(): 

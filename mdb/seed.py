@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 import time
 from math import log
 import operator
+import random
 import warnings
 
 import mdb.circstats
@@ -59,9 +60,9 @@ def play_dens_adjust_lastplay(playdens, lastplay, sdb, limit=1/12, weight=0.005)
         since last play, which should help avoid excessively boosting 
         songs I don't like much anymore.  Adjust this limit using the limit 
         parameter (unit: years)"""
-    year_seconds = 60 * 60 * 24 * 30
+    year_seconds = 60 * 60 * 24
     return {sid: playdens[sid] + \
-            weight * log(max(min(lastplay[sid].total_seconds() / year_seconds, limit), 0.00001))
+            weight * max(log(min(lastplay[sid].total_seconds() / year_seconds, limit)*10000), 0)
             for sid in playdens.keys()}
 
 #################################
@@ -90,14 +91,17 @@ def get_weather_dens(weather_db, sdb):
     cur = weather_db.cursor()
 
     # Get current conditions
-    mintime = (datetime.now() - timedelta(days=2)).timestamp()
+    mintime = (datetime.now() - timedelta(days=4)).timestamp()
+    print(mintime)
     cur.execute("SELECT * FROM basic_weather WHERE time > ? ORDER BY time DESC", (mintime,))
     (temp,pressure,precip) = cur.fetchone()[1:]
+    print(temp,pressure,precip)
     cur.execute("SELECT * FROM nws_weather WHERE time > ? ORDER BY time DESC", (mintime,))
     (sky,cloudcover,weathertype) = cur.fetchone()[1:4]
+    print(sky,cloudcover,weathertype)
     
     # Stage 1: Matching plays for ballpark temperature, I think.  I'm having trouble understanding my own SQL.
-    cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE temp_c > ? AND temp_c < ?", (temp-5, temp+5))
+    cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE temp_c > ? AND temp_c < ?", (temp-15, temp+15))
     temp_match = cur.fetchall()
     cur.execute("SELECT pkey FROM play_weather_match WHERE nws_time IS NOT NULL");
     temp_all = cur.fetchall()
@@ -115,11 +119,12 @@ def get_weather_dens(weather_db, sdb):
     cur.close()
     # Combine them
     match_count = _collect_songs(temp_match+conditions_match, sdb)
-    all_count = _collect_songs(temp_all+conditions_all, sdb)
+    all_count = _collect_songs(temp_all, sdb)
     # I was doing this instead in the script.  May call for more investigation.
     #seed = collect_songs(morefun, mdbdb) 
 
-    return _keywise_divide(match_count, all_count)
+    #return _keywise_divide(match_count, all_count)
+    return match_count
 
 ###########################################
 #  Song quality estimation                #
@@ -148,12 +153,13 @@ def keywise_mult(dict_a, dict_b):
     return {key: dict_a[key]*dict_b[key] for key in dict_a}
 
 def _keywise_divide(a, b):
-    return {key: a[key]/b[key] for key in a}
+    return {key: (1+a[key])/(1+b[key]) for key in a}
 
 def get_start_points(sdb):
     "Get possible start points, ordered based on time-appropriateness"
     dens = play_density(sdb)
-    pdistance = last_play_distance(sdb)
+    tdict = mdb.dtutil.times_dict(sdb)
+    pdistance = last_play_distance(tdict)
     dens = play_dens_adjust_lastplay(dens, pdistance, sdb)
     # Sort by proximity to current day of week and time
     start_point = list(dens.keys()) # Could try to narrow some stuff down here
@@ -161,3 +167,8 @@ def get_start_points(sdb):
     for point in start_point[:10]:
         print(mdb.util.key_to_string(point, sdb)+": "+str(dens[point]))
     return start_point
+
+def randomise_seeds(sdict, sigma=0.1):
+    rnd = random.Random()
+    for key in sdict:
+        sdict[key] *= rnd.normalvariate(1, sigma)

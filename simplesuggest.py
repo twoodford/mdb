@@ -20,5 +20,7 @@ if __name__=="__main__":
                 break
     else:
         sel_song = mdb.util.sname_to_key(sys.argv[1], sdb)
+        print(sel_song)
     slist = mdb.songgraph.graph_walk_maxocc(sel_song, graph, dens)
+    slist = mdb.songgraph.graph_walk_dual(sel_song, graph, max_len=10)
     [print(mdb.util.key_to_string(key, sdb)) for key in slist]
