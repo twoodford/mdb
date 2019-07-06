@@ -13,7 +13,7 @@ import xml.sax.handler
 class _WundergroundHandler(xml.sax.handler.ContentHandler):
     state = None
     obsdata = {}
-    def __init__(self, dbconn, debug=False):
+    def __init__(self, dbconn, debug=True):
         self.conn = dbconn
         self.debug = debug
 
@@ -54,7 +54,7 @@ def _parse_wunderground_xml(inxml, db):
     "Add new Weather Underground data from the XML string to the given database"
     parser = xml.sax.parse(inxml, _WundergroundHandler(db))
 
-def _parse_nws_html(inxml, db):
+def _parse_nws_html(inxml, db, absorb_basic=True):
     "Add new NWS data from the XML string to the database"
     soup = BeautifulSoup(inxml, "html.parser")
     # datetime parsing setup
@@ -85,19 +85,31 @@ def _parse_nws_html(inxml, db):
                     wind.append(0)
                 #DBG print("DEBUG: "+str(dt)+" "+str(dt.timestamp())+": "+str(wind)+" "+conditions+" "+simple_cond+" "+str(sky_cond))
                 cur.execute("SELECT * FROM nws_weather WHERE time=?", (dt.timestamp(),))
-                if len(cur.fetchall()) > 0: # cur.rowcount doesn't seem to work for this
-                    continue
+                if len(cur.fetchall()) == 0: # cur.rowcount doesn't seem to work for this
+                    if sky_cond[0][1] == '':
+                        cloud_cover = 0 # Handle blank strings (occur on clear days)
+                    else:
+                        cloud_cover = float(sky_cond[0][1])/10
 
-                if sky_cond[0][1] == '':
-                    cloud_cover = 0 # Handle blank strings (occur on clear days)
-                else:
-                    cloud_cover = float(sky_cond[0][1])/10
+                    print((dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
+                    cur.execute("INSERT INTO nws_weather VALUES (?,?,?,?,?)", 
+                        (dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
 
-                print((dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
-                cur.execute("INSERT INTO nws_weather VALUES (?,?,?,?,?)", 
-                    (dt.timestamp(), sky_cond[0][0], cloud_cover, simple_cond, int(wind[1])))
+                if not absorb_basic: continue
             except ValueError as e:
                 print("ValueError during parsing, continuing")
+
+            cur.execute("SELECT * FROM basic_weather WHERE time=?", (dt.timestamp(),))
+            if len(cur.fetchall()) > 0: # cur.rowcount doesn't seem to work for this
+                continue
+            temp_c = (float(cells[6].string) - 32)/1.8
+            if cells[15].string is None:
+                precip_mm = 0
+            else:
+                precip_mm = float(cells[15].string)*25.4
+            print(precip_mm, temp_c)
+            cur.execute('''INSERT INTO basic_weather(time, temp_c, precip_1hr_mm) VALUES (?,?,?)''', (dt.timestamp(), temp_c, precip_mm))
+            
     db.commit()
 
 def _simplify_conditions(conditions):
@@ -124,6 +136,8 @@ def _simplify_conditions(conditions):
         return "sunny"
     elif conditions.find("Thunderstorm") != -1:
         return "rain"
+    elif conditions.find("Haze") != -1:
+        return "white" # Goes later b/c haze gets mixed with other condition descriptions
     else:
         print("WARN: Unrecognised condition "+conditions)
         return "?"
@@ -149,5 +163,6 @@ def add_wunderground_data(station_name, db):
     _parse_wunderground_xml(xml_file, db)
 
 def add_nws_data(station_name, db):
+    print("http://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
     xml_file = urllib.request.urlopen("http://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
     _parse_nws_html(xml_file, db)
