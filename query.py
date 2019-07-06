@@ -1,4 +1,4 @@
-#!/usr/bin/which python3.6
+#!/usr/bin/env python3.6
 # query.py
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 # Command line query tool for the music database.
@@ -10,7 +10,7 @@ import mdb.circstats
 import mdb.util
 
 def dbg_list_times(sname, key, sdb):
-    print("Plays of "+sname)
+    #print("Plays of "+sname)
     cur = sdb.cursor()
     cur.execute("SELECT unixlocaltime, utcoffs FROM plays WHERE song=?", (key,))
     for tm in cur.fetchall():
@@ -19,12 +19,14 @@ def dbg_list_times(sname, key, sdb):
 
 def dbg_list_all_plays(sdb):
     cur = sdb.cursor()
-    cur.execute("SELECT name, plays.unixlocaltime FROM plays JOIN songs ON plays.song=songs.key")
+    cur.execute("SELECT name, plays.unixlocaltime, plays.utcoffs FROM plays JOIN songs ON plays.song=songs.key ORDER BY plays.unixlocaltime ASC")
     for play in cur.fetchall():
+        timez = timezone(timedelta(seconds=play[2]))
+        tm = datetime.fromtimestamp(play[1]-play[2], tz=timez)
         try:
-            print(str(play[0])+": "+str(play[1]))
+            print("{:<45}{:<20}".format(play[0], str(tm)))
         except UnicodeEncodeError:
-            pass
+            print("warn: UnicodeEncodeError")
 
 def run(argv):
     sdb = sqlite3.connect("data/music.sqlite3")
@@ -47,15 +49,15 @@ def run(argv):
             elif argv[1]=="avgday":
                 pre = mdb.circstats.preproc_dayofyear
                 post = mdb.circstats.postproc_dayofyear
-            cur.execute("SELECT datetime FROM plays WHERE song=?", (key,))
+            cur.execute("SELECT unixlocaltime, utcoffs FROM plays WHERE song=?", (key,))
             recs = cur.fetchall()
-            plays = [datetime.utcfromtimestamp(tm[0]) for tm in recs]
+            plays = [datetime.fromtimestamp(tm[0]-tm[1], tz=timezone(timedelta(seconds=tm[1]))) for tm in recs]
             avg = mdb.circstats.stat_avg(pre, post)(plays)
             sdev = mdb.circstats.stat_stddev(pre, post)(plays)
             print("Average time played: " + str(avg))
             print("Standard Deviation: " + str(sdev))
     else:
-        print("Usage: query.py (avgtime|avgday|listplays) [Song name]")
+        print("Usage: query.py (avgtime|avgday|listplays|listallplays) [Song name]")
 
 if __name__ == "__main__":
     import sys
