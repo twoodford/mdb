@@ -102,7 +102,9 @@ def _parse_nws_html(inxml, db, absorb_basic=True):
             cur.execute("SELECT * FROM basic_weather WHERE time=?", (dt.timestamp(),))
             if len(cur.fetchall()) > 0: # cur.rowcount doesn't seem to work for this
                 continue
-            temp_c = (float(cells[6].string) - 32)/1.8
+            try:
+                temp_c = (float(cells[6].string) - 32)/1.8
+            except ValueError: pass # Use last value of temp_c
             if cells[15].string is None:
                 precip_mm = 0
             else:
@@ -163,6 +165,6 @@ def add_wunderground_data(station_name, db):
     _parse_wunderground_xml(xml_file, db)
 
 def add_nws_data(station_name, db):
-    print("http://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
-    xml_file = urllib.request.urlopen("http://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
+    print("https://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
+    xml_file = urllib.request.urlopen("https://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
     _parse_nws_html(xml_file, db)
