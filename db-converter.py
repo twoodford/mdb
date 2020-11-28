@@ -9,7 +9,7 @@ import sqlite3
 # EST
 utcoffs = -5*60*60 # seconds
 
-def do_migration(db):
+def do_migration_1to2(db):
     cur = db.cursor()
     cur.execute("ALTER TABLE plays RENAME TO old_plays")
     cur.execute("""CREATE TABLE plays (
@@ -29,7 +29,30 @@ def do_migration(db):
         cur.execute("INSERT INTO plays VALUES (?,?,?,?)", (pkey, song, timeval, utcoffs))
     db.commit()
 
+def do_migration_2to3(db):
+    cur=db.cursor()
+    cur.execute("DROP TABLE old_plays")
+    cur.execute("ALTER TABLE plays RENAME TO old_plays")
+    cur.execute("""CREATE TABLE plays (
+                        pkey integer primary key,
+                        song integer,
+                        unixtime integer,
+                        utcoffs integer,
+                        FOREIGN KEY(song) REFERENCES songs(key)
+                )""")
+    cur.execute("SELECT pkey, song, unixlocaltime, utcoffs FROM old_plays")
+    for row in cur.fetchall():
+        (pkey, song, unixlocaltime, utcoffs) = row
+        cur.execute("INSERT INTO plays VALUES (?,?,?,?)", (pkey, song, unixlocaltime-utcoffs, utcoffs))
+    db.commit()
+
 if __name__=="__main__":
-    db = sqlite3.connect("data/music.sqlite3")
-    do_migration(db)
-    db.close()
+    if False:
+        db = sqlite3.connect("data/music.sqlite3")
+        do_migration(db)
+        db.close()
+    if True:
+        db = sqlite3.connect("data/music-v3.sqlite3")
+        do_migration_2to3(db)
+        db.close()
+
