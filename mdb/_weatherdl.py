@@ -6,6 +6,9 @@ from bs4 import BeautifulSoup
 import datetime
 import email.utils
 import sqlite3
+import json
+import requests
+import time
 import urllib.request
 import xml.sax
 import xml.sax.handler
@@ -144,6 +147,18 @@ def _simplify_conditions(conditions):
         print("WARN: Unrecognised condition "+conditions)
         return "?"
 
+def _owm_simplify_conditions(conditions):
+    # TODO https://openweathermap.org/weather-conditions#Weather-Condition-Codes-2
+    conditions = conditions.lower()
+    # Order is important here, so we don't use a dict
+    # Earlier mappings take priority over later
+    maps = [("snow", "snow"), ("rain", "rain"), ("overcast", "white"), ("fog", "white"), ("mist", "white"), ("clear sky", "sunny"), ("scattered clouds", "sunny"), ("few clouds", "sunny"), ("broken clouds", "sunny"), ("overcast clouds", "white"), ("thunderstorm", "rain"), ("drizzle", "clouds")]
+    for keyword, output in maps:
+        if conditions.find(keyword) != -1:
+            return output
+    print(f"WARN: unrecognized condition {conditions}")
+    return "??"
+
 def _infer_datetime(cutoff_day, current_mo, current_yr, dom_str, time_str):
     day = int(dom_str)
     year = current_yr
@@ -168,3 +183,39 @@ def add_nws_data(station_name, db):
     print("https://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
     xml_file = urllib.request.urlopen("https://w1.weather.gov/data/obhistory/{0}.html".format(station_name))
     _parse_nws_html(xml_file, db)
+
+def add_owm_data(lat, lon, db):
+    "Use OpenWeatherMap instead of NWS.  This gives us more-local weather and less parsing weirdness."
+    with open("owm_api_key.txt", "r") as owmf:
+        api_key = owmf.read().strip()
+    #req = requests.get(f"https://api.openweathermap.org/data/2.5/onecall?lat={lat}&lon={lon}&appid={api_key}&units=metric")
+    print(f"https://api.openweathermap.org/data/2.5/onecall/timemachine?lat={lat}&lon={lon}&dt={int(time.time())}&appid={api_key}&units=metric")
+    req = requests.get(f"https://api.openweathermap.org/data/2.5/onecall/timemachine?lat={lat}&lon={lon}&dt={int(time.time())}&appid={api_key}&units=metric")
+    if req.status_code != 200:
+        raise Exception(f"OWM returned non-200 status {req.status_code}")
+    dat = req.json()
+    for meas in dat["hourly"]:
+        dt = datetime.datetime.fromtimestamp(meas["dt"], tz=datetime.timezone.utc)
+        # sanity check
+        if dt > datetime.datetime.now(datetime.timezone.utc): continue
+        cur = db.cursor()
+        cur.execute("SELECT * FROM nws_weather WHERE time=?", (dt.timestamp(),))
+        if len(cur.fetchall()) > 0: # cur.rowcount doesn't seem to work for this
+            continue
+        cur.execute("SELECT * FROM basic_weather WHERE time=?", (dt.timestamp(),))
+        if len(cur.fetchall()) > 0:
+            continue
+        temp_c = meas["temp"] # C
+        pressure = meas["pressure"] # 1 millibar = 1 hPa
+        rain_mm = meas["rain"]["1h"] if "rain" in meas else 0 # mm / hour
+        snow_mm = meas["snow"]["1h"] if "snow" in meas else 0 # mm / hour
+        cloud_cover = meas["clouds"] # percentage (ie., max 100)
+        conditions = meas["weather"][0]["description"]
+        simple_cond = _owm_simplify_conditions(conditions)
+        wind = meas["wind_speed"]
+        # nws_weather: (dt.timestamp(), (SKIP - NWS only), cloud_cover, simple_cond, windspeed)
+        # basic_weather: (tm.timestamp(), temp_c, pressure, precip_1hr_mm)
+        print(f"DEBUG: {dt} {dt.timestamp()}: {temp_c} {pressure} {rain_mm} {cloud_cover} {conditions}=>{simple_cond} {wind}")
+        cur.execute('INSERT INTO basic_weather(time, temp_c, pressure_mb, precip_1hr_mm) VALUES (?,?,?,?)', (dt.timestamp(), temp_c, pressure, rain_mm + snow_mm))
+        cur.execute('INSERT INTO nws_weather(time, cloudcover, weathertype, windspeed) VALUES (?,?,?,?)', (dt.timestamp(), cloud_cover, simple_cond, wind))
+    db.commit()
