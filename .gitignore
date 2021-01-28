@@ -4,3 +4,4 @@ old
 *.swp
 data/
 *.log
+owm_api_key.txt
