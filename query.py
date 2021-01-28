@@ -16,7 +16,7 @@ def dbg_list_times(sname, key, sdb, weathdb):
     #print("Plays of "+sname)
     cur = sdb.cursor()
     wcur = weathdb.cursor()
-    cur.execute("SELECT unixlocaltime, utcoffs, pkey FROM plays WHERE song=?", (key,))
+    cur.execute("SELECT unixtime, utcoffs, pkey FROM plays WHERE song=?", (key,))
     for tm in cur.fetchall():
         pkey = tm[2]
         timez = timezone(timedelta(seconds=tm[1]))
@@ -24,22 +24,22 @@ def dbg_list_times(sname, key, sdb, weathdb):
         wcur = weathdb.cursor()
         wcur.execute("SELECT bw.temp_c, nws.skycondition, nws.cloudcover FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE pwm.pkey=?", (pkey,))
         weath_matches = wcur.fetchall()
-        if len(weath_matches) > 0:
-            weath_str = f"{weath_matches[0][0]}˚C {weath_matches[0][2]}% clouds {weath_matches[0][1]}"
-        else: weath_str = ""
+        try:
+            weath_str = f"{weath_matches[0][0]:.1f}˚C {weath_matches[0][2]}% cloudcover {weath_matches[0][1]}"
+        except: weath_str = ""
         try:
             #print("{:<45}{:<20}".format(play[0], str(tm)))
-            print(f"{datetime.fromtimestamp(tm[0]-tm[1], tz=timez)} {weath_str}")
+            print(f"{datetime.fromtimestamp(tm[0], tz=timez)} {weath_str}")
         except UnicodeEncodeError:
             print("warn: UnicodeEncodeError")
 
 def dbg_list_all_plays_w_weather(sdb, weathdb):
     cur = sdb.cursor()
-    cur.execute("SELECT name, plays.unixlocaltime, plays.utcoffs, pkey FROM plays JOIN songs ON plays.song=songs.key ORDER BY plays.unixlocaltime ASC")
+    cur.execute("SELECT name, plays.unixtime, plays.utcoffs, pkey FROM plays JOIN songs ON plays.song=songs.key ORDER BY plays.unixtime ASC")
     for play in cur.fetchall():
         pkey = play[3]
         timez = timezone(timedelta(seconds=play[2]))
-        tm = datetime.fromtimestamp(play[1]-play[2], tz=timez)
+        tm = datetime.fromtimestamp(play[1], tz=timez)
         wcur = weathdb.cursor()
         wcur.execute("SELECT bw.temp_c, nws.skycondition, nws.cloudcover FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE pwm.pkey=?", (pkey,))
         weath_matches = wcur.fetchall()
@@ -54,17 +54,15 @@ def dbg_list_all_plays_w_weather(sdb, weathdb):
 
 def dbg_list_all_plays(sdb, weathdb):
     cur = sdb.cursor()
-    cur.execute("SELECT name, plays.unixlocaltime, plays.utcoffs, pkey FROM plays JOIN songs ON plays.song=songs.key ORDER BY plays.unixlocaltime ASC")
+    cur.execute("SELECT name, plays.unixtime, plays.utcoffs, pkey FROM plays JOIN songs ON plays.song=songs.key ORDER BY plays.unixtime ASC")
     for play in cur.fetchall():
         pkey = play[3]
         timez = timezone(timedelta(seconds=play[2]))
-        tm = datetime.fromtimestamp(play[1]-play[2], tz=timez)
+        tm = datetime.fromtimestamp(play[1], tz=timez)
         try:
             print(f"{play[0]:<45}{tm}")
         except UnicodeEncodeError:
             print("warn: UnicodeEncodeError")
-
-
 
 
 def dbg_get_timedens(sdb):
@@ -75,7 +73,7 @@ def dbg_get_timedens(sdb):
         print(mdb.util.key_to_string(pv[0], sdb), ": ", pv[1])
 
 def run(argv):
-    sdb = sqlite3.connect("data/music.sqlite3")
+    sdb = sqlite3.connect("data/music-v3.sqlite3")
     weathdb = sqlite3.connect("data/weather.sqlite3")
     cur = sdb.cursor()
     if len(argv) > 2:
@@ -98,9 +96,9 @@ def run(argv):
             elif argv[1]=="avgday":
                 pre = mdb.circstats.preproc_dayofyear
                 post = mdb.circstats.postproc_dayofyear
-            cur.execute("SELECT unixlocaltime, utcoffs FROM plays WHERE song=?", (key,))
+            cur.execute("SELECT unixtime, utcoffs FROM plays WHERE song=?", (key,))
             recs = cur.fetchall()
-            plays = [datetime.fromtimestamp(tm[0]-tm[1], tz=timezone(timedelta(seconds=tm[1]))) for tm in recs]
+            plays = [datetime.fromtimestamp(tm[0], tz=timezone(timedelta(seconds=tm[1]))) for tm in recs]
             avg = mdb.circstats.stat_avg(pre, post)(plays)
             sdev = mdb.circstats.stat_stddev(pre, post)(plays)
             print("Average time played: " + str(avg))
