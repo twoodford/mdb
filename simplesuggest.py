@@ -1,4 +1,4 @@
-#!/opt/local/bin/python3.6
+#!/opt/local/bin/python3.8
 # simplesuggest.py
 # Copyright (C) 2014 Timothy Woodford.  All rights reserved.
 from __future__ import print_function

@@ -1,4 +1,4 @@
-#!/opt/local/bin/python3.6
+#!/opt/local/bin/python3.8
 # Experiment in finding weather matches
 # NOTE EXPERIMENT should be made into something nicer sometime
 import datetime
@@ -36,7 +36,7 @@ if __name__=="__main__":
     times_dict = mdb.dtutil.times_dict(mdbdb)
     skips_dict = mdb.dtutil.times_dict(mdbdb, table="skips")
     graph = mdb.songgraph.make_play_graph(mdbdb)
-    wdens = mdb.seed.get_weather_dens(wdb, mdbdb)
+    wdens = mdb.seed.get_weather_dens(wdb, mdbdb, weathertype=None)
     #wdens = collect_songs(morefun, mdbdb)
     # Revise with time-based play densities
     pdens = mdb.seed.play_times_density(times_dict)
@@ -55,19 +55,21 @@ if __name__=="__main__":
     lplay_dist = mdb.seed.last_play_distance(times_dict)
     combo_dens = mdb.seed.play_dens_adjust_lastplay(combo_dens, lplay_dist, mdbdb, 28/365)
     # Randomise it a bit, 'cause why not
-    mdb.seed.randomise_seeds(combo_dens, sigma=0.03)
+    mdb.seed.randomise_seeds(combo_dens, sigma=0.003)
     revised = sorted([(key, combo_dens[key]) for key in combo_dens], key=operator.itemgetter(1), reverse=True)
-    #[print(mdb.util.key_to_string(song, mdbdb)) for song in wdens]
+    weather_sorted = sorted([(key, wdens[key]) for key in wdens], key=operator.itemgetter(1), reverse=True)
+    print("weather")
+    [print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in weather_sorted[:15]]
     print("alternate")
     [print(mdb.util.key_to_string(song[0], mdbdb), song[1]) for song in revised[:15]]
 
     sel_song = revised[0][0]
-    sel_song = 3274
-    #print("forward walk test")
+    #sel_song = 3274
+    print("forward walk test")
     #fw_walk = mdb.songgraph.graph_walk(revised[0][0], graph, combo_dens)
     #[print(mdb.util.key_to_string(song, mdbdb)) for song in fw_walk]
 
-    print("alternate walk test")
-    alt1_walk = mdb.songgraph.graph_walk_dual(revised[0][0], graph, combo_dens)
+    #print("alternate walk test")
+    #alt1_walk = mdb.songgraph.graph_walk_dual(revised[0][0], graph, combo_dens)
     #[print(mdb.util.key_to_string(song, mdbdb)) for song in alt1_walk]
 

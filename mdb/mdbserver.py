@@ -18,7 +18,8 @@ import mdb.songgraph
 sdb = sqlite3.connect("data/music.sqlite3")
 weather_db = sqlite3.connect("data/weather.sqlite3")
 graph = mdb.songgraph.make_play_graph(sdb)
-pdens = mdb.seed.play_density(sdb)
+times_dict = mdb.dtutil.times_dict(sdb)
+pdens = mdb.seed.play_times_density(times_dict)
 wdens = mdb.seed.get_weather_dens(weather_db, sdb)
 combo_dens = {}
 
@@ -27,15 +28,30 @@ def update_pdens(schedu, sdb_tl, wdb_tl):
     global pdens
     global combo_dens
     print("updating")
+    # Need new connection for running this in a different thread
     if sdb_tl is None or wdb_tl is None:
         sdb_tl = sqlite3.connect("data/music.sqlite3")
         wdb_tl = sqlite3.connect("data/weather.sqlite3")
-    pdens = mdb.seed.play_density(sdb_tl)
+    pdens = mdb.seed.play_times_density(times_dict)
     wdens = mdb.seed.get_weather_dens(wdb_tl, sdb_tl)
     combo_dens = {sid: (weather_dens * math.sqrt(pdens[sid])) for (sid, weather_dens) in wdens.items()}
+    combo_dens = mdb.seed.keywise_mult(wdens, pdens)
     for key in pdens:
         if key not in combo_dens:
-            combo_dens[key] = pdens[key] * 0.02
+            combo_dens[key] = pdens[key] * 0.04
+    # Mix it up...
+    # Plays adjuster
+    plays_adj = mdb.seed.num_plays_adjustment(times_dict, weight=0.01)
+    combo_dens = mdb.seed.keywise_mult(combo_dens, plays_adj)
+    # Rating adjuster
+    rating_adj = mdb.seed.rating_adjustment(sdb_tl, weight=0.8)
+    combo_dens = mdb.seed.keywise_mult(combo_dens, rating_adj)
+    # Recentness - has to go last for now 'cause it's funky
+    lplay_dist = mdb.seed.last_play_distance(times_dict)
+    combo_dens = mdb.seed.play_dens_adjust_lastplay(combo_dens, lplay_dist, sdb_tl, 28/365)
+    # Add a tad bit of randomness
+    mdb.seed.randomise_seeds(combo_dens, sigma=0.04)
+    
     print("done")
     schedu.enter(60, 0, update_pdens, (schedu, sdb_tl, wdb_tl))
 
@@ -68,7 +84,10 @@ class MDBRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(self._encode_song_list(songkeys))
         elif self.path=="/weatherseed":
             print(self.headers)
-            seed = sorted([(sid, weather_dens * math.sqrt(pdens[sid])) for (sid, weather_dens) in wdens.items()], key=operator.itemgetter(1), reverse=True)
+            #seed = sorted([(sid, weather_dens * math.sqrt(pdens[sid])) for (sid, weather_dens) in wdens.items()], key=operator.itemgetter(1), reverse=True)
+            # Randomise each time we run this to give a slightly different result
+            mdb.seed.randomise_seeds(combo_dens, sigma=0.02)
+            seed = sorted([(key, combo_dens[key]) for key in combo_dens], key=operator.itemgetter(1), reverse=True)
             songkeys = [x[0] for x in seed[:20]]
             self._do_ok()
             self.end_headers()

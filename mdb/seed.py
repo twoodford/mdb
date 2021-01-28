@@ -42,7 +42,10 @@ def play_times_density(times_dict):
     # Ideally, we should shift all song play data to local time.  Until
     # that happens, we need to compensate for the fact that everything's in UTC
     now = datetime.utcnow().time()
+    now = datetime.now().time()
     current_dow = datetime.now().weekday()
+    print(now)
+    key1 = list(times_dict.keys())[0]
     return {key: mdb.dtutil.day_of_week_density(times_dict[key])[current_dow] * \
             mdb.dtutil.time_local_density_smoothed(now, times_dict[key])
             for key in times_dict}
@@ -87,7 +90,7 @@ def _collect_songs(playids, mdbdb):
     return songs
     #return sorted(songs.items(), key=operator.itemgetter(1), reverse=True)
 
-def get_weather_dens(weather_db, sdb):
+def get_weather_dens(weather_db, sdb, weathertype=None, temp=None):
     cur = weather_db.cursor()
 
     # Get current conditions
@@ -96,9 +99,12 @@ def get_weather_dens(weather_db, sdb):
     cur.execute("SELECT * FROM basic_weather WHERE time > ? ORDER BY time DESC", (mintime,))
     (temp,pressure,precip) = cur.fetchone()[1:]
     print(temp,pressure,precip)
-    cur.execute("SELECT * FROM nws_weather WHERE time > ? ORDER BY time DESC", (mintime,))
-    (sky,cloudcover,weathertype) = cur.fetchone()[1:4]
-    print(sky,cloudcover,weathertype)
+    if weathertype is None:
+        cur.execute("SELECT * FROM nws_weather WHERE time > ? ORDER BY time DESC", (mintime,))
+        (sky,cloudcover,weathertype) = cur.fetchone()[1:4]
+        print(sky,cloudcover,weathertype)
+
+    #weathertype="rain"
     
     # Stage 1: Matching plays for ballpark temperature, I think.  I'm having trouble understanding my own SQL.
     cur.execute("SELECT pkey FROM play_weather_match AS pwm JOIN nws_weather AS nws ON pwm.nws_time=nws.time LEFT OUTER JOIN basic_weather AS bw ON pwm.basic_time=bw.time WHERE temp_c > ? AND temp_c < ?", (temp-15, temp+15))
