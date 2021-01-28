@@ -58,13 +58,13 @@ def times_dict(sdb, table="plays"):
        The db parameter SHOULD NOT come from user input unless you like SQL 
        injections."""
     cur = sdb.cursor()
-    cur.execute("SELECT song, unixlocaltime, utcoffs FROM {0}".format(table))
+    cur.execute("SELECT song, unixtime, utcoffs FROM {0}".format(table))
     # TODO figure out if we need to mess with the timezone
     ret = {}
     for play in cur.fetchall(): 
         if not play[0] in ret: ret[play[0]] = []
         timez = datetime.timezone(datetime.timedelta(seconds=play[2]))
-        ret[play[0]].append(datetime.datetime.fromtimestamp(play[1]-play[2], tz=timez))
+        ret[play[0]].append(datetime.datetime.fromtimestamp(play[1], tz=timez))
     return ret
 
 def now():

@@ -15,7 +15,7 @@ import mdb.seed
 import mdb.util
 import mdb.songgraph
 
-sdb = sqlite3.connect("data/music.sqlite3")
+sdb = sqlite3.connect("data/music-v3.sqlite3")
 weather_db = sqlite3.connect("data/weather.sqlite3")
 graph = mdb.songgraph.make_play_graph(sdb)
 times_dict = mdb.dtutil.times_dict(sdb)
@@ -30,7 +30,7 @@ def update_pdens(schedu, sdb_tl, wdb_tl):
     print("updating")
     # Need new connection for running this in a different thread
     if sdb_tl is None or wdb_tl is None:
-        sdb_tl = sqlite3.connect("data/music.sqlite3")
+        sdb_tl = sqlite3.connect("data/music-v3.sqlite3")
         wdb_tl = sqlite3.connect("data/weather.sqlite3")
     pdens = mdb.seed.play_times_density(times_dict)
     wdens = mdb.seed.get_weather_dens(wdb_tl, sdb_tl)

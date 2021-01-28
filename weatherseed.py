@@ -32,9 +32,8 @@ def collect_songs(playids, mdbdb):
 if __name__=="__main__":
     # Note: requires recent weather in weather.sqlite
     wdb = sqlite3.connect("data/weather.sqlite3")
-    mdbdb = sqlite3.connect("data/music.sqlite3")
+    mdbdb = sqlite3.connect("data/music-v3.sqlite3")
     times_dict = mdb.dtutil.times_dict(mdbdb)
-    skips_dict = mdb.dtutil.times_dict(mdbdb, table="skips")
     graph = mdb.songgraph.make_play_graph(mdbdb)
     wdens = mdb.seed.get_weather_dens(wdb, mdbdb, weathertype=None)
     #wdens = collect_songs(morefun, mdbdb)

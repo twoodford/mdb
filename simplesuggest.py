@@ -10,7 +10,7 @@ import mdb.util
 import mdb.songgraph
 
 if __name__=="__main__":
-    sdb = sqlite3.connect("data/music.sqlite3")
+    sdb = sqlite3.connect("data/music-v3.sqlite3")
     graph = mdb.songgraph.make_play_graph(sdb)
     dens = mdb.seed.play_density(sdb)
     if len(sys.argv)<=1:

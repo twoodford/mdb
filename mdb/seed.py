@@ -45,7 +45,6 @@ def play_times_density(times_dict):
     now = datetime.now().time()
     current_dow = datetime.now().weekday()
     print(now)
-    key1 = list(times_dict.keys())[0]
     return {key: mdb.dtutil.day_of_week_density(times_dict[key])[current_dow] * \
             mdb.dtutil.time_local_density_smoothed(now, times_dict[key])
             for key in times_dict}

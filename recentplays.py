@@ -42,7 +42,7 @@ if __name__=="__main__":
     print("most recent")
     mcur = mdbdb.cursor()
     cur_time = round(time.clock_gettime(time.CLOCK_REALTIME))
-    mcur.execute("SELECT * FROM plays WHERE unixtime > ? AND unixtime < ?", (cur_time - 60*60*24*31*12, (cur_time + 0)))
+    mcur.execute("SELECT * FROM plays WHERE unixtime > ? AND unixtime < ?", (cur_time - 60*60*24*31*3, (cur_time + 0)))
     #mcur.execute("SELECT * FROM plays WHERE unixtime > ? AND unixtime < ?", (cur_time - 60*60*24*365*2, cur_time - 60*60*24*365))
     #mcur.execute("SELECT * FROM plays WHERE datetime > ? AND datetime < ?", (cur_time - 60*60*24*30*5,cur_time - 60*60*24*30*3))
     rlist = mcur.fetchall()

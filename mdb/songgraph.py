@@ -12,7 +12,7 @@ def make_play_graph(sdb, grtype=nx.DiGraph):
     gr = grtype()
     cur = sdb.cursor()
     # We don't need timezone awareness here - songs that were played close together
-    cur.execute("SELECT song, unixlocaltime FROM plays ORDER BY unixlocaltime ASC")
+    cur.execute("SELECT song, unixtime FROM plays ORDER BY unixtime ASC")
     prev = None
     for row in cur.fetchall():
         if prev:
